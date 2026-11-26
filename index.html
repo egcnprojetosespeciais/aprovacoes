@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Aprovação de conteúdos</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #FAF9F6; color: #111; font: 16px/1.5 Arial, sans-serif; }
+  .c { text-align: center; padding: 24px; max-width: 440px; }
+  .sp { width: 34px; height: 34px; border: 3px solid #ddd; border-top-color: #111; border-radius: 50%; animation: g 1s linear infinite; margin: 0 auto 14px; }
+  @keyframes g { to { transform: rotate(360deg); } }
+  .c p { margin: 0 0 10px; }
+  .c a { color: #111; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="c" id="c"><div class="sp"></div><p>Carregando o material…</p></div>
+<script>
+/*
+ * Página intermediária do sistema de aprovação.
+ * Ela busca a página de aprovação no Google Apps Script SEM usar a conta Google de quem abre
+ * (evita o erro "Não foi possível abrir o arquivo" de quem está logado em várias contas
+ * ou numa conta de empresa). Não precisa editar nada neste arquivo.
+ */
+(function () {
+  var q = new URLSearchParams(location.search);
+  var id = q.get('a') || '';
+  if (!/^[\w-]{20,}$/.test(id) || !/^[a-f0-9]{64}$/.test(q.get('p') || '')) {
+    erro('Este link está incompleto. Peça o link de novo para quem te enviou.');
+    return;
+  }
+  var EXEC = 'https://script.google.com/macros/s/' + id + '/exec';
+  var CHAVES = ['p', 'preview', 'print'];
+  var params = new URLSearchParams();
+  params.set('api', 'pagina');
+  params.set('base', location.origin + location.pathname + '?a=' + encodeURIComponent(id));
+  CHAVES.forEach(function (k) { if (q.get(k)) params.set(k, q.get(k)); });
+  var direto = EXEC + '?' + CHAVES.filter(function (k) { return q.get(k); })
+    .map(function (k) { return k + '=' + encodeURIComponent(q.get(k)); }).join('&');
+
+  fetch(EXEC + '?' + params.toString(), { credentials: 'omit', redirect: 'follow' })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (res) { abrir(res.html, res.titulo); })
+    .catch(function () {
+      erro('Não foi possível carregar o material agora. Confira a internet e tente de novo em alguns instantes.', direto);
+    });
+
+  function abrir(html, titulo) {
+    var extra = '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
+      '<script>(' + SHIM.toString() + ')(' + JSON.stringify(EXEC) + ');<\/script>';
+    if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, function (m) { return m + extra; });
+    else html = extra + html;
+    document.open();
+    document.write(html);
+    document.close();
+    if (titulo) document.title = titulo;
+  }
+
+  function erro(msg, link) {
+    document.getElementById('c').innerHTML = '<p>' + msg + '</p>' +
+      (link ? '<p><a href="' + link + '">Tentar pelo endereço alternativo</a></p>' : '');
+  }
+
+  // Substitui o google.script.run da página: as mesmas chamadas, feitas por fetch, sem login
+  function SHIM(EXEC) {
+    function chamada(ok, falha) {
+      return new Proxy({}, {
+        get: function (_, nome) {
+          if (nome === 'withSuccessHandler') return function (f) { return chamada(f, falha); };
+          if (nome === 'withFailureHandler') return function (f) { return chamada(ok, f); };
+          if (nome === 'withUserObject') return function () { return chamada(ok, falha); };
+          return function () {
+            var args = Array.prototype.slice.call(arguments);
+            fetch(EXEC, {
+              method: 'POST', credentials: 'omit', redirect: 'follow',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({ fn: String(nome), args: args })
+            })
+              .then(function (r) { return r.json(); })
+              .then(function (res) {
+                if (res && res.ok) { if (ok) ok(res.valor); }
+                else if (falha) falha(new Error((res && res.erro) || 'Erro no servidor.'));
+              })
+              .catch(function () { if (falha) falha(new Error('Sem conexão com o servidor. Tente de novo.')); });
+          };
+        }
+      });
+    }
+    window.google = { script: { get run() { return chamada(null, null); } } };
+  }
+})();
+</script>
+</body>
+</html>
