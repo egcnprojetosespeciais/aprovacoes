@@ -35,13 +35,14 @@
     return;
   }
   var EXEC = 'https://script.google.com/macros/s/' + id + '/exec';
-  var CHAVES = ['p', 'c', 'preview', 'print'];
-  var params = new URLSearchParams();
+  // Repassa para o sistema. Atenção: "c" é um nome reservado pelo Google, então o link curto vai como "curto".
+  var repasse = new URLSearchParams();
+  ['p', 'preview', 'print'].forEach(function (k) { if (q.get(k)) repasse.set(k, q.get(k)); });
+  if (curto && !q.get('p')) repasse.set('curto', curto);
+  var params = new URLSearchParams(repasse.toString());
   params.set('api', 'pagina');
   params.set('base', location.origin + location.pathname + '?a=' + encodeURIComponent(id));
-  CHAVES.forEach(function (k) { if (q.get(k)) params.set(k, q.get(k)); });
-  var direto = EXEC + '?' + CHAVES.filter(function (k) { return q.get(k); })
-    .map(function (k) { return k + '=' + encodeURIComponent(q.get(k)); }).join('&');
+  var direto = EXEC + '?' + repasse.toString();
 
   fetch(EXEC + '?' + params.toString(), { credentials: 'omit', redirect: 'follow' })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
