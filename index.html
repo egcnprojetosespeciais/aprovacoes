@@ -24,14 +24,18 @@
  * ou numa conta de empresa). Não precisa editar nada neste arquivo.
  */
 (function () {
+  // Endereço (ID) do sistema. Os links longos trazem o ID no próprio link (?a=…);
+  // os links curtos (?c=nome-do-projeto) usam este:
+  var ID_PADRAO = 'AKfycbxcjQ3kGpG2t-Xbf0hLaGT3GlhiopzppmzAgZ9juLLEmG5rLMd4R7YaiFw-vCIWegk-tg';
   var q = new URLSearchParams(location.search);
-  var id = q.get('a') || '';
-  if (!/^[\w-]{20,}$/.test(id) || !/^[a-f0-9]{64}$/.test(q.get('p') || '')) {
+  var id = q.get('a') || ID_PADRAO;
+  var curto = (q.get('c') || '').toLowerCase();
+  if (!/^[\w-]{20,}$/.test(id) || !(/^[a-f0-9]{64}$/.test(q.get('p') || '') || /^[a-z0-9-]{2,60}$/.test(curto))) {
     erro('Este link está incompleto. Peça o link de novo para quem te enviou.');
     return;
   }
   var EXEC = 'https://script.google.com/macros/s/' + id + '/exec';
-  var CHAVES = ['p', 'preview', 'print'];
+  var CHAVES = ['p', 'c', 'preview', 'print'];
   var params = new URLSearchParams();
   params.set('api', 'pagina');
   params.set('base', location.origin + location.pathname + '?a=' + encodeURIComponent(id));
